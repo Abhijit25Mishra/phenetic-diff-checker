@@ -8,7 +8,10 @@ import soundfile as sf
 from transformers import Wav2Vec2Processor, Wav2Vec2ForCTC
 
 # --- CONFIGURATION ---
-MODEL_NAME = "facebook/wav2vec2-base-960h"
+# MODEL_NAME = "facebook/wav2vec2-base-960h"
+# MODEL_NAME = "facebook/wav2vec2-large-960h-lv60-self"
+MODEL_NAME = "facebook/wav2vec2-xlsr-53-espeak-cv-ft"
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # --- LOGGER SETUP ---
@@ -169,7 +172,8 @@ def compute_alignment_score(waveform, transcript):
 if __name__ == "__main__":
     # --- USER SETTINGS ---
     AUDIO_FILE = "test_audio.wav"
-    CORRECT_TEXT = "A DOG JUMPS OVER A FENCE AND BITES A WOMAN"
+    # CORRECT_TEXT = "A DOG JUMPS OVER A FENCE AND BITES A DOG"
+    CORRECT_TEXT = "COMMANDO JOHN LEAD THE TEAM TO VICTORY"
 
     logger.info(f"Target Text: '{CORRECT_TEXT}'")
 
