@@ -3,12 +3,11 @@ import base64
 import json
 import logging
 import os
-import time
 import datetime
 
 # --- CONFIGURATION ---
-SPEECH_KEY = "e785dffe487e4e15aab97968d6758799"
-SPEECH_REGION = "eastus"
+SPEECH_KEY =
+SPEECH_REGION =
 
 
 # --- LOGGER SETUP ---
@@ -29,11 +28,26 @@ def setup_logger(base_name="azure_rest_debug"):
 
     return logger
 
-
 logger = setup_logger()
 
+def get_audio_bytes(audio_source):
+    """
+    Helper to get raw audio bytes from either a URL or a local file path.
+    """
+    # CASE 1: It's a URL
+    if audio_source.startswith("http://") or audio_source.startswith("https://"):
+        logger.info(f"Downloading audio from URL: {audio_source}")
+        try:
+            response = requests.get(audio_source)
+            response.raise_for_status()  # Raise error if 404/500
+            logger.info(f"Download complete. Size: {len(response.content)} bytes")
+            return response.content
+        except Exception as e:
+            logger.critical(f"Failed to download audio URL: {e}")
+            return None
 
-def check_pronunciation_rest(audio_path, reference_text):
+
+def check_pronunciation_rest(audio_source, reference_text):
     logger.info("=" * 50)
     logger.info("STARTING REST API PRONUNCIATION CHECK")
     logger.info("=" * 50)
@@ -53,13 +67,11 @@ def check_pronunciation_rest(audio_path, reference_text):
     pron_json = json.dumps(pron_config)
     pron_base64 = base64.b64encode(pron_json.encode('utf-8')).decode('utf-8')
 
-    # 3. Read Audio
-    if not os.path.exists(audio_path):
-        logger.critical(f"Audio file missing: {audio_path}")
+    # 3. GET AUDIO DATA (From URL or Local)
+    audio_data = get_audio_bytes(audio_source)
+    if not audio_data:
+        print("❌ Error: Could not load audio data.")
         return
-
-    with open(audio_path, 'rb') as f:
-        audio_data = f.read()
 
     # 4. Headers
     headers = {
@@ -86,7 +98,7 @@ def check_pronunciation_rest(audio_path, reference_text):
 
     # --- PRINT COMPACT JSON (Single Line / Word Wrapped) ---
     print("\n" + "=" * 20 + " RAW JSON RESPONSE " + "=" * 20)
-    print(json.dumps(result))  # No 'indent' param = Single line output
+    print(json.dumps(result))
     print("=" * 60 + "\n")
 
     if result.get('RecognitionStatus') == 'Success':
@@ -97,32 +109,27 @@ def check_pronunciation_rest(audio_path, reference_text):
 
         best_attempt = nbest[0]
 
-        # Helper function to find keys safely (REST API vs SDK structure differences)
         def get_score(obj, key):
-            # Try finding the key directly (REST format)
             if key in obj: return obj[key]
-            # Try finding it in nested 'PronunciationAssessment' (SDK format)
             if 'PronunciationAssessment' in obj:
                 return obj['PronunciationAssessment'].get(key)
             return None
 
-        # High-level scores
         acc_score = get_score(best_attempt, 'AccuracyScore')
         fluency_score = get_score(best_attempt, 'FluencyScore')
+        display_text = result.get('DisplayText', '')
 
         print("--- RESULTS ---")
+        print(f"Heard:    '{display_text}'")
         print(f"Accuracy: {acc_score}")
         print(f"Fluency:  {fluency_score}")
 
         print("\n--- WORD ANALYSIS ---")
         for word in best_attempt.get('Words', []):
             text = word.get('Word')
-
-            # Use helper to find scores wherever they are hiding
             accuracy = get_score(word, 'AccuracyScore')
             error_type = get_score(word, 'ErrorType')
 
-            # Handle Missing/None scores safely
             if accuracy is None: accuracy = 0
 
             icon = "✅"
@@ -137,8 +144,6 @@ def check_pronunciation_rest(audio_path, reference_text):
                 print("   Phonemes: ", end="")
                 for ph in word['Phonemes']:
                     ph_char = ph.get('Phoneme')
-
-                    # Same helper check for phonemes
                     ph_acc = get_score(ph, 'AccuracyScore')
                     if ph_acc is None: ph_acc = 0
 
@@ -156,7 +161,9 @@ def check_pronunciation_rest(audio_path, reference_text):
 
 
 if __name__ == "__main__":
-    AUDIO = "test_audio.wav"
-    TEXT = "I was eating a pizza"
+    # YOU CAN NOW PASS A URL HERE:
+    # AUDIO_URL = "https://nkb-backend-ccbp-media-static.s3-ap-south-1.amazonaws.com/ccbp_beta/media/content_loading/uploads/f2293ad9-eb8d-455f-8ddd-c6590515833a_test_audio.wav"
+    AUDIO_URL = "https://nkb-backend-ccbp-media-static.s3-ap-south-1.amazonaws.com/ccbp_beta/media/content_loading/uploads/07bb9f2d-e332-4469-b170-92284853f7e5_test_audio_wrong_rate%201.wav"
+    TEXT = "The captain will lead the team to victory"
 
-    check_pronunciation_rest(AUDIO, TEXT)
+    check_pronunciation_rest(AUDIO_URL, TEXT)
